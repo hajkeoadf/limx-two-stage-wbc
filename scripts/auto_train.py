@@ -76,8 +76,8 @@ def train_go1(arg):
         Cfg.terrain.teleport_robots = False
         
     Cfg.control.update_obs_freq = 20  # Hz
-    Cfg.env.num_actions = 18
-    Cfg.env.num_observations = 63
+    Cfg.env.num_actions = 14
+    Cfg.env.num_observations = 54
 
     
     Cfg.hybrid.reward_scales.tracking_lin_vel = 0.7 * Cfg.reward_scales.tracking_lin_vel

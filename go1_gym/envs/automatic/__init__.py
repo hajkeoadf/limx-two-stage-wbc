@@ -9,7 +9,7 @@ from go1_gym.utils.global_switch import global_switch
 from go1_gym.utils.math_utils import (get_scale_shift, quat_apply_yaw,
                                       wrap_to_pi)
 
-from .legged_robot import LeggedRobot, quaternion_to_rpy
+from .limx_robot import LeggedRobot, quaternion_to_rpy
 from .legged_robot_config import Cfg
 import pytorch3d.transforms as pt3d
 
@@ -30,17 +30,21 @@ class VelocityTrackingEasyEnv(LeggedRobot):
 
     def plan(self, obs):
         rescaled_obs = obs * 0.4
+        # Plan actions: [pitch, roll, base_height] or [pitch, roll, base_height, lin_vel, ang_vel] if plan_vel=True
         self.commands_dog[:, 3] = torch.clip(rescaled_obs[..., 0],
                                              self.cfg.commands.limit_body_pitch[0],
-                                             self.cfg.commands.limit_body_pitch[1] / 4 * 3.) # [n, 2]
+                                             self.cfg.commands.limit_body_pitch[1] / 4 * 3.)  # pitch
         self.commands_dog[:, 4] = torch.clip(rescaled_obs[..., 1],
                                              self.cfg.commands.limit_body_roll[0],
-                                             self.cfg.commands.limit_body_roll[1])  # [n, 2]
-        
+                                             self.cfg.commands.limit_body_roll[1])  # roll
+        self.commands_dog[:, 5] = torch.clip(rescaled_obs[..., 2],
+                                             self.cfg.commands.limit_base_height[0],
+                                             self.cfg.commands.limit_base_height[1])  # base_height
         
         if self.cfg.hybrid.plan_vel:
-            self.commands_dog[:, 0] = torch.clip(rescaled_obs[..., 2], -2, 2)  # lin_vel
-            self.commands_dog[:, 2] = torch.clip(rescaled_obs[..., 3], -2, 2)  # ang_vel
+            # If plan_vel is True, obs should have 5 dimensions: [pitch, roll, base_height, lin_vel, ang_vel]
+            self.commands_dog[:, 0] = torch.clip(rescaled_obs[..., 3], -2, 2)  # lin_vel
+            self.commands_dog[:, 2] = torch.clip(rescaled_obs[..., 4], -2, 2)  # ang_vel
         self.plan_actions[:] = rescaled_obs
 
     def reset(self):
@@ -52,6 +56,7 @@ class VelocityTrackingEasyEnv(LeggedRobot):
         
         rpy = quaternion_to_rpy(self.base_quat)
         roll, pitch, yaw = rpy[:, 0], rpy[:, 1], rpy[:, 2]
+        base_height = self.base_pos[:, 2]
         
         obs_buf = torch.cat(((self.dof_pos[:, self.num_actions_loco:self.num_actions_loco+self.num_actions_arm] 
                               - self.default_dof_pos[:,self.num_actions_loco:self.num_actions_loco+self.num_actions_arm])
@@ -72,6 +77,7 @@ class VelocityTrackingEasyEnv(LeggedRobot):
                     (self.obj_obs_abg_in_ee[:]),
                     roll.unsqueeze(1),
                     pitch.unsqueeze(1),
+                    base_height.unsqueeze(1),
                 ), dim=-1)
         else:
             idx = 9 if self.cfg.use_rot6d else 6
@@ -81,6 +87,7 @@ class VelocityTrackingEasyEnv(LeggedRobot):
                     self.commands_arm_obs[:, :idx],
                     roll.unsqueeze(1),
                     pitch.unsqueeze(1),
+                    base_height.unsqueeze(1),
                 ), dim=-1)
 
         
@@ -167,6 +174,7 @@ class VelocityTrackingEasyEnv(LeggedRobot):
         """
         rpy = quaternion_to_rpy(self.base_quat)
         roll, pitch, yaw = rpy[:, 0], rpy[:, 1], rpy[:, 2]
+        base_height = self.base_pos[:, 2]
         obs_buf = torch.cat((self.projected_gravity,
                                 (self.dof_pos[:, :self.num_actions_loco] - self.default_dof_pos[:,
                                                                             :self.num_actions_loco]) * self.obs_scales.dof_pos,
@@ -178,20 +186,22 @@ class VelocityTrackingEasyEnv(LeggedRobot):
             # "obj_obs_pose_in_ee" and "obj_obs_abg_in_ee" are already updated in the "get_arm_observations()"
             obs_buf = torch.cat(
                 (obs_buf,
-                    (self.commands_dog * self.commands_scale_dog)[:, :5],
+                    (self.commands_dog * self.commands_scale_dog)[:, :6],
                     (self.obj_obs_pose_in_ee[:]) if global_switch.switch_open else torch.zeros_like(self.obj_obs_pose_in_ee[:]),
                     (self.obj_obs_abg_in_ee[:]) if global_switch.switch_open else torch.zeros_like(self.obj_obs_abg_in_ee[:]),
                     roll.unsqueeze(1),
                     pitch.unsqueeze(1),
+                    base_height.unsqueeze(1),
                 ), dim=-1)
         else:
             idx = 9 if self.cfg.use_rot6d else 6
             obs_buf = torch.cat(
                 (obs_buf,
-                    (self.commands_dog * self.commands_scale_dog)[:, :5],
+                    (self.commands_dog * self.commands_scale_dog)[:, :6],
                     (self.commands_arm_obs[:, :6]) if global_switch.switch_open else torch.zeros_like(self.commands_arm_obs[:, :idx]),
                     roll.unsqueeze(1),
                     pitch.unsqueeze(1),
+                    base_height.unsqueeze(1),
                 ), dim=-1)
         
         if self.cfg.env.observe_two_prev_actions:
