@@ -25,7 +25,7 @@ from go1_gym_learn.ppo_cse_automatic.dog_ac import DogAC_Args
 from go1_gym_learn.ppo_cse_automatic.arm_ac import ArmAC_Args
 
 
-from go1_gym.utils import format_code, set_seed, global_switch
+from go1_gym.utils import format_code, set_seed, global_switch, clean_dict_for_formatting
 os.environ["WANDB_SILENT"] = "true"
 
 def train_go1(arg):
@@ -72,7 +72,7 @@ def train_go1(arg):
         
     Cfg.control.update_obs_freq = 20  # Hz
     Cfg.env.num_actions = 14
-    Cfg.env.num_observations = 48
+    Cfg.env.num_observations = 63
 
     
     Cfg.hybrid.reward_scales.tracking_lin_vel = 0.7 * Cfg.reward_scales.tracking_lin_vel
@@ -146,14 +146,17 @@ def train_go1(arg):
         Cfg.asset.file = '{MINI_GYM_ROOT_DIR}/resources/robots/arx5p2Go1/urdf/arx5p2Go1.urdf'
     elif args.robot == "go2":
         Cfg.asset.file = '{MINI_GYM_ROOT_DIR}/resources/robots/go2/urdf/arx5go2.urdf'
+    elif args.robot == "limx":
+        Cfg.asset.file = '{MINI_GYM_ROOT_DIR}/resources/robots/SF_TRON1A/urdf/robot.urdf'
     
     if args.headless:
-        RunnerArgs.log_video = False
+        RunnerArgs.log_video = True  # 允许headless模式下保存视频
+        RunnerArgs.save_video_interval = 100  # 每100个iteration保存一次视频
     
     
     now = datetime.now()
     stem = Path(__file__).stem
-    wandb.init(entity="RoboDuet",
+    wandb.init(entity="heyuxin345-sun-yat-sen-university",
                project="dev",
                group=args.run_name,
                mode=mode,
@@ -174,11 +177,10 @@ def train_go1(arg):
         os.makedirs(f"{MINI_GYM_ROOT_DIR}/tmp/deploy_model", exist_ok=True)
 
         # save code
-        shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/scripts/auto_train.py", f"{args.log_dir}/scripts/auto_train.py")
-        shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/go1_gym/envs/automatic/legged_robot.py", f"{args.log_dir}/scripts/legged_robot.py")
-        shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/go1_gym/envs/automatic/legged_robot_config.py", f"{args.log_dir}/scripts/legged_robot_config.py")
+        shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/scripts/limx_auto_train.py", f"{args.log_dir}/scripts/limx_auto_train.py")
+        shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/go1_gym/envs/automatic/limx_robot.py", f"{args.log_dir}/scripts/limx_robot.py")
+        shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/go1_gym/envs/automatic/limx_robot_config.py", f"{args.log_dir}/scripts/limx_robot_config.py")
         shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/go1_gym/envs/automatic/__init__.py", f"{args.log_dir}/scripts/env__init__.py")
-        shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/go1_gym/envs/go1/asset_config.py", f"{args.log_dir}/scripts/asset_config.py")
         
         shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/go1_gym_learn/ppo_cse_automatic/__init__.py", f"{args.log_dir}/scripts/ppo_cse_automatic__init__.py")
         shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/go1_gym_learn/ppo_cse_automatic/arm_ac.py", f"{args.log_dir}/scripts/arm_ac.py")
@@ -191,7 +193,9 @@ def train_go1(arg):
         temp_dict = {"Cfg": vars(Cfg), "RunnerArgs": vars(RunnerArgs), "ArmAC_Args": vars(ArmAC_Args), "DogAC_Args": vars(DogAC_Args), "PPO_Args": vars(PPO_Args),}
 
         with open(f"{args.log_dir}/params.txt", "w", encoding="utf-8") as f:
-            format_temp_dict = format_code(str(temp_dict))
+            # Clean dictionary to make it serializable before formatting
+            cleaned_dict = clean_dict_for_formatting(temp_dict)
+            format_temp_dict = format_code(str(cleaned_dict))
             f.write(format_temp_dict)
 
         with open(osp.join(args.log_dir, "parameters.pkl"), 'wb') as f:
@@ -225,7 +229,7 @@ if __name__ == '__main__':
     parser.add_argument('--tags', nargs='+', default=[])
     parser.add_argument('--notes', type=str, default=None)
     parser.add_argument('--seed', type=int, default=-1)
-    parser.add_argument('--robot', type=str, default="go1", choices=["go1", "go2"])
+    parser.add_argument('--robot', type=str, default="limx", choices=["go1", "go2", "limx"])
     parser.add_argument('--wo_two_stage', action='store_true', default=False)
     parser.add_argument('--use_rot6d', action='store_true', default=False)
 

@@ -36,3 +36,50 @@ def get_scale_shift(range):
     scale = 2. / (range[1] - range[0])
     shift = (range[1] + range[0]) / 2.
     return scale, shift
+
+
+class CubicSpline:
+    def __init__(self, start, end):
+        self.t0 = start['time']
+        self.t1 = end['time']
+        self.dt = end['time'] - start['time']
+
+        dp = end['position'] - start['position']
+        dv = end['velocity'] - start['velocity']
+
+        self.dc0 = torch.tensor(0.0)
+        self.dc1 = start['velocity']
+        self.dc2 = -(3.0 * start['velocity'] + dv)
+        self.dc3 = (2.0 * start['velocity'] + dv)
+
+        self.c0 = self.dc0 * self.dt + start['position']
+        self.c1 = self.dc1 * self.dt
+        self.c2 = self.dc2 * self.dt + 3.0 * dp
+        self.c3 = self.dc3 * self.dt - 2.0 * dp
+
+    def position(self, time):
+        tn = self.normalized_time(time)
+        return self.c3 * tn ** 3 + self.c2 * tn ** 2 + self.c1 * tn + self.c0
+
+    def velocity(self, time):
+        tn = self.normalized_time(time)
+        return (3.0 * self.c3 * tn ** 2 + 2.0 * self.c2 * tn + self.c1) / self.dt
+
+    def acceleration(self, time):
+        tn = self.normalized_time(time)
+        return (6.0 * self.c3 * tn + 2.0 * self.c2) / (self.dt ** 2)
+
+    def start_time_derivative(self, t):
+        tn = self.normalized_time(t)
+        dCoff = -(self.dc3 * tn ** 3 + self.dc2 * tn ** 2 + self.dc1 * tn + self.dc0)
+        dTn = -(self.t1 - t) / (self.dt ** 2)
+        return self.velocity(t) * self.dt * dTn + dCoff
+
+    def final_time_derivative(self, t):
+        tn = self.normalized_time(t)
+        dCoff = (self.dc3 * tn ** 3 + self.dc2 * tn ** 2 + self.dc1 * tn + self.dc0)
+        dTn = -(t - self.t0) / (self.dt ** 2)
+        return self.velocity(t) * self.dt * dTn + dCoff
+
+    def normalized_time(self, t):
+        return (t - self.t0) / self.dt

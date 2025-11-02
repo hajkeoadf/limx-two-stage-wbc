@@ -10,7 +10,7 @@ from go1_gym.utils.math_utils import (get_scale_shift, quat_apply_yaw,
                                       wrap_to_pi)
 
 from .limx_robot import LeggedRobot, quaternion_to_rpy
-from .legged_robot_config import Cfg
+from .limx_robot_config import Cfg
 import pytorch3d.transforms as pt3d
 
 
@@ -53,7 +53,6 @@ class VelocityTrackingEasyEnv(LeggedRobot):
         return obs
 
     def get_arm_observations(self):
-        
         rpy = quaternion_to_rpy(self.base_quat)
         roll, pitch, yaw = rpy[:, 0], rpy[:, 1], rpy[:, 2]
         base_height = self.base_pos[:, 2]
@@ -208,10 +207,10 @@ class VelocityTrackingEasyEnv(LeggedRobot):
             obs_buf = torch.cat((obs_buf, self.last_actions), dim=-1)
 
         if self.cfg.env.observe_timing_parameter:
-            obs_buf = torch.cat((obs_buf, self.gait_indices.unsqueeze(1)), dim=-1)
+            obs_buf = torch.cat((obs_buf, self.gaits), dim=-1)
 
         if self.cfg.env.observe_clock_inputs:
-            obs_buf = torch.cat((obs_buf, self.clock_inputs), dim=-1)
+            obs_buf = torch.cat((obs_buf, self.clock_inputs_sin.view(self.num_envs, 1), self.clock_inputs_cos.view(self.num_envs, 1)), dim=-1)
 
 
         if self.cfg.env.observe_vel:

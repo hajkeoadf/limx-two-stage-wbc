@@ -74,13 +74,13 @@ class Rewards:
 
     def _reward_arm_action_smoothness_1(self):
         # Penalize changes in actions
-        diff = torch.square(self.env.joint_pos_target[:, self.env.num_actions_loco:-2] - self.env.last_joint_pos_target[:, self.env.num_actions_loco:-2])
+        diff = torch.square(self.env.joint_pos_target[:, self.env.num_actions_loco:] - self.env.last_joint_pos_target[:, self.env.num_actions_loco:])
         diff = diff * (self.env.last_actions[:, self.env.num_actions_loco:] != 0)  # ignore first step
         return torch.sum(diff, dim=1)
 
     def _reward_arm_action_smoothness_2(self):
         # Penalize changes in actions
-        diff = torch.square(self.env.joint_pos_target[:, self.env.num_actions_loco:-2] - 2 * self.env.last_joint_pos_target[:, self.env.num_actions_loco:-2] + self.env.last_last_joint_pos_target[:, self.env.num_actions_loco:-2])
+        diff = torch.square(self.env.joint_pos_target[:, self.env.num_actions_loco:] - 2 * self.env.last_joint_pos_target[:, self.env.num_actions_loco:] + self.env.last_last_joint_pos_target[:, self.env.num_actions_loco:])
         diff = diff * (self.env.last_actions[:, self.env.num_actions_loco:] != 0)  # ignore first step
         diff = diff * (self.env.last_last_actions[:, self.env.num_actions_loco:] != 0)  # ignore second step
         return torch.sum(diff, dim=1)
@@ -149,7 +149,7 @@ class Rewards:
         foot_forces = torch.norm(self.env.contact_forces[:, self.env.feet_indices, :], dim=-1)
         desired_contact = self.env.desired_contact_states
         reward = 0
-        if self.env.reward_scales["tracking_contacts_shaped_force"] > 0:
+        if self.env.cfg.reward_scales.tracking_contacts_shaped_force > 0:
             for i in range(len(self.env.feet_indices)):
                 swing_phase = 1 - desired_contact[:, i]
                 reward += swing_phase * torch.exp(
@@ -170,7 +170,7 @@ class Rewards:
         foot_velocities = torch.norm(self.env.foot_velocities, dim=-1)
         desired_contact = self.env.desired_contact_states
         reward = 0
-        if self.env.reward_scales["tracking_contacts_shaped_vel"] > 0:
+        if self.env.cfg.reward_scales.tracking_contacts_shaped_vel > 0:
             for i in range(len(self.env.feet_indices)):
                 stand_phase = desired_contact[:, i]
                 reward += stand_phase * torch.exp(
@@ -203,7 +203,7 @@ class Rewards:
         foot_heights = self.env.foot_heights
         desired_contact = self.env.desired_contact_states
         reward = 0
-        if self.env.reward_scales["tracking_contacts_shaped_height"] > 0:
+        if self.env.cfg.reward_scales.tracking_contacts_shaped_height > 0:
             for i in range(len(self.env.feet_indices)):
                 swing_phase = 1 - desired_contact[:, i]
                 # if self.cfg.terrain.mesh_type == "plane":
@@ -296,7 +296,7 @@ class Rewards:
 
     def _reward_base_height_control(self):
         base_height_command = self.env.commands_dog[:, 5]
-        return torch.sum(torch.square(self.env.base_pos[:, 2] - base_height_command), dim=1)
+        return torch.square(self.env.base_pos[:, 2] - base_height_command)
     
     # vis
     def _reward_vis_manip_commands_tracking_lpy(self):

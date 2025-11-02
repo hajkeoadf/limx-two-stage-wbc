@@ -11,7 +11,7 @@ class Cfg(PrefixProto, cli=False):
         use_vision = False
         
         class rewards(PrefixProto, cli=False):
-            terminal_body_height = 0.40
+            terminal_body_height = 0.20
             use_terminal_body_height = True
             use_terminal_roll = False
             use_terminal_pitch = True
@@ -84,7 +84,7 @@ class Cfg(PrefixProto, cli=False):
         num_actions_loco = 8
         dog_num_privileged_obs = 2
         dog_num_observation_history = 30
-        dog_num_observations = 48
+        dog_num_observations = 54
         dog_num_obs_history = dog_num_observations * dog_num_observation_history
         dog_num_commands = 6
         dog_actions = 8
@@ -362,6 +362,7 @@ class Cfg(PrefixProto, cli=False):
         file = "{MINI_GYM_ROOT_DIR}/resources/robots/SF_TRON1A/urdf/robot.urdf"
 
         foot_name = "ankle"  # 双足机器人的足部链接名称
+        foot_radius = 0.00
         arm_link_name = ["link"]  # 机械臂链接名称前缀
         arm_joint_name = ["J"]    # 机械臂关节名称前缀(仅J1-J6)
         biped_joint_name = ["_L_Joint", "_R_Joint"]  # 双足关节名称(左腿_L_Joint，右腿_R_Joint)
@@ -369,7 +370,7 @@ class Cfg(PrefixProto, cli=False):
         arm_gripper_name = "link6"  # 机械臂末端执行器(删除夹爪后使用link6)
 
         penalize_contacts_on = ["knee", "hip"]
-        terminate_after_contacts_on = ["base"]
+        terminate_after_contacts_on = []
         disable_gravity = False
 
         # merge bodies connected by fixed joints. Specific fixed joints can be kept by adding " <... dont_collapse="true">

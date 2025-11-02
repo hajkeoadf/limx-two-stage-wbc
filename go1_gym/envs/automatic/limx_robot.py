@@ -293,7 +293,7 @@ class LeggedRobot(BaseTask):
         self.last_root_vel[:] = self.root_states[:, 7:13]
 
         self.last_foot_positions[:] = self.foot_positions[:]
-        self.last_base_positions[:] = self.base_pos[:]
+        self.last_base_position[:] = self.base_pos[:]
 
         if not self.headless and self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()
@@ -343,6 +343,7 @@ class LeggedRobot(BaseTask):
         # reset robot states
         self._resample_commands(env_ids)
         self._resample_arm_commands(env_ids)
+        self._resample_gaits(env_ids)
         self._randomize_dof_props(env_ids, self.cfg)
         if self.cfg.domain_rand.randomize_rigids_after_start:
             self._randomize_rigid_body_props(env_ids, self.cfg)
@@ -354,8 +355,9 @@ class LeggedRobot(BaseTask):
         # reset buffers
         self.last_actions[env_ids] = 0.
         self.last_last_actions[env_ids] = 0.
+        self.last_base_position[env_ids] = self.base_pos[env_ids]
+        self.last_foot_positions[env_ids] = self.foot_positions[env_ids]
         self.last_dof_vel[env_ids] = 0.
-        self.feet_air_time[env_ids] = 0.
         self.episode_length_buf[env_ids] = 0
         self.reset_buf[env_ids] = 1
         # fill extras
@@ -727,14 +729,14 @@ class LeggedRobot(BaseTask):
                 self.dof_pos_limits[i, 0] = m - 0.5 * r * self.cfg.rewards.soft_dof_pos_limit
                 self.dof_pos_limits[i, 1] = m + 0.5 * r * self.cfg.rewards.soft_dof_pos_limit
 
-                if self.cfg.control.control_type == "M":
-                    if self.cfg.arm.control.arm_control_type == "position":
-                        props["driveMode"][self.arm_indices.cpu()].fill(gymapi.DOF_MODE_POS)
-                        props["stiffness"][self.arm_indices.cpu()].fill(self.cfg.arm.control.arm_stiffness)
-                        props["damping"][self.arm_indices.cpu()].fill(self.cfg.arm.control.arm_damping)
+            if self.cfg.control.control_type == "M":
+                if self.cfg.arm.control.arm_control_type == "position":
+                    props["driveMode"][self.arm_indices.cpu()].fill(gymapi.DOF_MODE_POS)
+                    for idx in self.arm_indices.cpu().numpy():
+                        props[idx]["stiffness"] = self.cfg.arm.control.arm_stiffness
+                        props[idx]["damping"] = self.cfg.arm.control.arm_damping
 
             print(props)
-        
         return props
 
     def _randomize_rigid_body_props(self, env_ids, cfg):
@@ -1282,6 +1284,7 @@ class LeggedRobot(BaseTask):
         self.net_contact_forces = gymtorch.wrap_tensor(net_contact_forces)[:self.num_envs * self.num_bodies, :]
         self.dof_pos = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 0]
         self.base_pos = self.root_states[:self.num_envs, 0:3]
+        self.last_base_position = self.base_pos.clone()
         self.dof_vel = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 1]
         self.base_quat = self.root_states[:self.num_envs, 3:7]
         self.rigid_body_state = gymtorch.wrap_tensor(rigid_body_state)[:self.num_envs * self.num_bodies, :]
@@ -1370,34 +1373,52 @@ class LeggedRobot(BaseTask):
 
         # joint positions offsets and PD gains
         self.default_dof_pos = torch.zeros(self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
-        for i in range(self.num_dof):
+        # for i in range(self.num_dof):
+        #     name = self.dof_names[i]
+        #     angle = self.cfg.init_state.default_joint_angles[name]
+        #     self.default_dof_pos[i] = angle
+        #     found = False
+
+        #     if i >= self.num_actions: 
+        #         self.p_gains[i] = 0.
+        #         self.d_gains[i] = 0.
+        #         continue
+
+        #     for dof_name in self.cfg.control.stiffness.keys():
+        #         if dof_name in name:
+        #             self.p_gains[i] = self.cfg.dog.control.stiffness_leg[dof_name] \
+        #                 if i < self.num_actions_loco else self.cfg.arm.control.stiffness_arm[dof_name] # [N*m/rad]
+        #             self.d_gains[i] = self.cfg.dog.control.damping_leg[dof_name] \
+        #                 if i < self.num_actions_loco else self.cfg.arm.control.damping_arm[dof_name]  # [N*m*s/rad]
+        #             found = True
+
+        #     if not found:
+        #         self.p_gains[i] = 0.
+        #         self.d_gains[i] = 0.
+        #         if self.cfg.control.control_type in ["M", "P"]: # M: Mixture, P: position
+        #             print(f"PD gain of joint {name} were not defined, setting them to zero")
+        # self.default_dof_pos = self.default_dof_pos.unsqueeze(0) # [1,20]
+
+        self.default_dof_pos = torch.zeros(self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
+        for i in range(self.num_dofs):
             name = self.dof_names[i]
             angle = self.cfg.init_state.default_joint_angles[name]
             self.default_dof_pos[i] = angle
             found = False
-
-            if i >= self.num_actions: 
-                self.p_gains[i] = 0.
-                self.d_gains[i] = 0.
-                continue
-
             for dof_name in self.cfg.control.stiffness.keys():
                 if dof_name in name:
-                    self.p_gains[i] = self.cfg.dog.control.stiffness_leg[dof_name] \
-                        if i < self.num_actions_loco else self.cfg.arm.control.stiffness_arm[dof_name] # [N*m/rad]
-                    self.d_gains[i] = self.cfg.dog.control.damping_leg[dof_name] \
-                        if i < self.num_actions_loco else self.cfg.arm.control.damping_arm[dof_name]  # [N*m*s/rad]
+                    self.p_gains[i] = self.cfg.control.stiffness[dof_name]
+                    self.d_gains[i] = self.cfg.control.damping[dof_name]
                     found = True
-
             if not found:
                 self.p_gains[i] = 0.
                 self.d_gains[i] = 0.
-                if self.cfg.control.control_type in ["M", "P"]: # M: Mixture, P: position
+                if self.cfg.control.control_type in ["P", "V"]:
                     print(f"PD gain of joint {name} were not defined, setting them to zero")
-        self.default_dof_pos = self.default_dof_pos.unsqueeze(0) # [1,20]
-        print("p gains: ", self.p_gains)
-        print("d gains: ", self.d_gains)
+        self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
 
+        print("###p gains: ", self.p_gains)
+        print("###d gains: ", self.d_gains)
 
         self.commands_dog = torch.zeros(self.num_envs, self.cfg.dog.dog_num_commands, dtype=torch.float,
                                           device=self.device, requires_grad=False)  # x vel, y vel, yaw vel, heading
@@ -1490,7 +1511,7 @@ class LeggedRobot(BaseTask):
             Looks for self._reward_<REWARD_NAME>, where <REWARD_NAME> are names of all non zero reward scales in the cfg.
         """
         # reward containers
-        from go1_gym.envs.rewards.rewards import Rewards
+        from go1_gym.envs.rewards.limx_rewards import Rewards
         reward_containers = {"Rewards": Rewards}
         self.reward_container = reward_containers[self.cfg.rewards.reward_container_name](self)
 
@@ -1701,55 +1722,56 @@ class LeggedRobot(BaseTask):
             self.gym.set_asset_rigid_shape_properties(self.robot_asset, rigid_shape_props)
             anymal_handle = self.gym.create_actor(env_handle, self.robot_asset, start_pose, "anymal", i,
                                                   self.cfg.asset.self_collisions, 0)
+            self.envs.append(env_handle)
+            self.actor_handles.append(anymal_handle)
+
+            if i == 0:
+                self.feet_indices = torch.zeros(len(feet_names), dtype=torch.long, device=self.device, requires_grad=False)
+                for j in range(len(feet_names)):
+                    self.feet_indices[j] = self.gym.find_actor_rigid_body_handle(self.envs[0], self.actor_handles[0],
+                                                                                feet_names[j])
+
+                self.penalised_contact_indices = torch.zeros(len(penalized_contact_names), dtype=torch.long, device=self.device,
+                                                            requires_grad=False)
+                for j in range(len(penalized_contact_names)):
+                    self.penalised_contact_indices[j] = self.gym.find_actor_rigid_body_handle(self.envs[0],
+                                                                                            self.actor_handles[0],
+                                                                                            penalized_contact_names[j])
+
+                self.termination_contact_indices = torch.zeros(len(termination_contact_names), dtype=torch.long,
+                                                            device=self.device, requires_grad=False)
+                for j in range(len(termination_contact_names)):
+                    self.termination_contact_indices[j] = self.gym.find_actor_rigid_body_handle(self.envs[0],
+                                                                                                self.actor_handles[0],
+                                                                                                termination_contact_names[j])
+                # 踝关节索引（双足机器人的足部）
+                self.ankle_indices = torch.zeros(len(ankle_names), dtype=torch.long, device=self.device, requires_grad=False)
+                for j in range(len(ankle_names)):
+                    self.ankle_indices[j] = self.gym.find_actor_dof_handle(self.envs[0], self.actor_handles[0], ankle_names[j])
+                
+                # 机械臂关节索引
+                self.arm_indices = torch.zeros(len(arm_names), dtype=torch.long, device=self.device, requires_grad=False)
+                for j in range(len(arm_names)):
+                    self.arm_indices[j] = self.gym.find_actor_dof_handle(self.envs[0], self.actor_handles[0], arm_names[j])
+
+                # 双足关节索引（所有腿部关节）
+                self.biped_indices = torch.zeros(len(biped_names), dtype=torch.long, device=self.device, requires_grad=False)
+                for j in range(len(biped_names)):
+                    self.biped_indices[j] = self.gym.find_actor_dof_handle(self.envs[0], self.actor_handles[0], biped_names[j])
+
+                self.ee_idx = self.gym.find_actor_rigid_body_handle(
+                    self.envs[0], self.actor_handles[0], self.cfg.asset.arm_gripper_name
+                )
+        
+                print("###arm_names:",arm_names)
+                print("###arm_indices:",self.arm_indices)
+                print("###ee_index:",self.ee_idx)
+
             dof_props = self._process_dof_props(dof_props_asset, i)
             self.gym.set_actor_dof_properties(env_handle, anymal_handle, dof_props)
             body_props = self.gym.get_actor_rigid_body_properties(env_handle, anymal_handle)
             body_props = self._process_rigid_body_props(body_props, i)
             self.gym.set_actor_rigid_body_properties(env_handle, anymal_handle, body_props, recomputeInertia=True)
-            self.envs.append(env_handle)
-            self.actor_handles.append(anymal_handle)
-
-        self.feet_indices = torch.zeros(len(feet_names), dtype=torch.long, device=self.device, requires_grad=False)
-        for i in range(len(feet_names)):
-            self.feet_indices[i] = self.gym.find_actor_rigid_body_handle(self.envs[0], self.actor_handles[0],
-                                                                         feet_names[i])
-
-        self.penalised_contact_indices = torch.zeros(len(penalized_contact_names), dtype=torch.long, device=self.device,
-                                                     requires_grad=False)
-        for i in range(len(penalized_contact_names)):
-            self.penalised_contact_indices[i] = self.gym.find_actor_rigid_body_handle(self.envs[0],
-                                                                                      self.actor_handles[0],
-                                                                                      penalized_contact_names[i])
-
-        self.termination_contact_indices = torch.zeros(len(termination_contact_names), dtype=torch.long,
-                                                       device=self.device, requires_grad=False)
-        for i in range(len(termination_contact_names)):
-            self.termination_contact_indices[i] = self.gym.find_actor_rigid_body_handle(self.envs[0],
-                                                                                        self.actor_handles[0],
-                                                                                        termination_contact_names[i])
-        # 踝关节索引（双足机器人的足部）
-        self.ankle_indices = torch.zeros(len(ankle_names), dtype=torch.long, device=self.device, requires_grad=False)
-        for i in range(len(ankle_names)):
-            self.ankle_indices[i] = self.gym.find_actor_dof_handle(self.envs[0], self.actor_handles[0], ankle_names[i])
-        
-        # 机械臂关节索引
-        self.arm_indices = torch.zeros(len(arm_names), dtype=torch.long, device=self.device, requires_grad=False)
-        for i in range(len(arm_names)):
-            self.arm_indices[i] = self.gym.find_actor_dof_handle(self.envs[0], self.actor_handles[0], arm_names[i])
-
-        # 双足关节索引（所有腿部关节）
-        self.biped_indices = torch.zeros(len(biped_names), dtype=torch.long, device=self.device, requires_grad=False)
-        for i in range(len(biped_names)):
-            self.biped_indices[i] = self.gym.find_actor_dof_handle(self.envs[0], self.actor_handles[0], biped_names[i])
-
-        self.ee_idx = self.gym.find_actor_rigid_body_handle(
-            self.envs[0], self.actor_handles[0], self.cfg.asset.arm_gripper_name
-        )
-        
-        print("###arm_names:",arm_names)
-        print("###arm_indices:",self.arm_indices)
-        print("###hand_index:",self.hand_index)
-        print("###gripperMover_handles (末端执行器):",self.gripperMover_handles)
         
         # if recording video, set up camera
         if self.cfg.env.record_video:
@@ -2089,7 +2111,8 @@ class LeggedRobot(BaseTask):
     #     self.desired_footswing_height = footswing_height_cmd
 
     def compute_foot_state(self):
-        self.feet_state = self.rigid_body_state[:, self.feet_indices, :]
+        # rigid_body_state 是2维的 [num_envs * num_bodies, 13]，需要先 view 成3维
+        self.feet_state = self.rigid_body_state.view(self.num_envs, self.num_bodies, 13)[:, self.feet_indices, :]
         self.foot_quat = self.rigid_body_state.view(self.num_envs, self.num_bodies, 13)[
             :, self.feet_indices, 3:7
         ]
@@ -2113,7 +2136,7 @@ class LeggedRobot(BaseTask):
 
         foot_relative_velocities = (
             self.foot_velocities
-            - (self.base_position - self.last_base_position)
+            - (self.base_pos - self.last_base_position)
             .unsqueeze(1)
             .repeat(1, len(self.feet_indices), 1)
             / self.dt

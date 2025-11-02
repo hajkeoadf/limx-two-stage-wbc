@@ -50,11 +50,13 @@ pip install -e .
 ## Usage
 ### Train
 ```bash
-python scripts/auto_train.py --num_envs 4096 --run_name test_roboduet --sim_device cuda:0 --robot go1  # or --robot go2 
+python scripts/auto_train.py --num_envs 4096 --run_name test_roboduet --sim_device cuda:0 --robot limx  # or --robot go2 
 ```
 you can also use "--headless" to run the simulation without GUI
 ```bash
-python scripts/auto_train.py --num_envs 4096 --run_name test_roboduet --sim_device cuda:0 --robot go1 --headless
+python scripts/limx_auto_train.py --num_envs 4096 --run_name test_roboduet --sim_device cuda:0 --robot limx --headless  --no_wandb
+
+export LD_LIBRARY_PATH=/home2/HYX/.conda/envs/limx/lib:$LD_LIBRARY_PATH
 ```
 </br>
 

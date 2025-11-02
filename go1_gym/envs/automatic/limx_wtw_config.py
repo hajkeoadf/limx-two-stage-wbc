@@ -78,7 +78,7 @@ def config_wtw(Cnfg: Union[Cfg, Meta]):
     Cnfg.env.num_observations = 70
     Cnfg.env.num_scalar_observations = 70
     Cnfg.env.observe_gait_commands = True
-    Cnfg.env.observe_timing_parameter = False
+    Cnfg.env.observe_timing_parameter = True
     Cnfg.env.observe_clock_inputs = True
 
     Cnfg.domain_rand.tile_height_range = [-0.0, 0.0]
@@ -100,7 +100,7 @@ def config_wtw(Cnfg: Union[Cfg, Meta]):
     Cnfg.terrain.horizontal_scale = 0.10
     Cnfg.rewards.use_terminal_foot_height = False
     Cnfg.rewards.use_terminal_body_height = True
-    Cnfg.rewards.terminal_body_height = 0.40  # Updated to match solefoot_flat and limx requirements
+    Cnfg.rewards.terminal_body_height = 0.20  # Updated to match solefoot_flat and limx requirements
     Cnfg.rewards.use_terminal_roll_pitch = True
     Cnfg.rewards.terminal_body_ori = 1.6
 
@@ -169,14 +169,14 @@ def config_wtw(Cnfg: Union[Cfg, Meta]):
     Cnfg.commands.limit_gait_duration = [0.5, 0.5]
     Cnfg.commands.limit_footswing_height = [0.10, 0.20]  # Updated to match solefoot_flat
     Cnfg.commands.limit_body_pitch = [-0.4, 0.4]
-    Cnfg.commands.limit_body_roll = [-0.0, 0.0]
+    Cnfg.commands.limit_body_roll = [-0.4, 0.4]
     Cnfg.commands.limit_stance_width = [0.10, 0.45]
     Cnfg.commands.limit_stance_length = [0.35, 0.45]
 
     Cnfg.commands.num_bins_vel_x = 21
     Cnfg.commands.num_bins_vel_y = 1
     Cnfg.commands.num_bins_vel_yaw = 21
-    Cnfg.commands.num_bins_body_height = 1
+    Cnfg.commands.num_bins_base_height = 21
     Cnfg.commands.num_bins_gait_frequency = 1
     Cnfg.commands.num_bins_gait_phase = 1
     Cnfg.commands.num_bins_gait_offset = 1
