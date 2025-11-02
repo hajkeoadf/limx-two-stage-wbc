@@ -48,8 +48,8 @@ class Cfg(PrefixProto, cli=False):
         class commands(PrefixProto, cli=False):
             angle75 = torch.deg2rad(torch.tensor(75))
             angle60 = torch.deg2rad(torch.tensor(60))
-            l = [0.3, 0.77]
-            p = [-1 * torch.pi / 6, 1 * torch.pi / 3]  # 75 
+            l = [0.4, 0.6]  # 增加最小距离从0.3到0.4,提高末端最低高度
+            p = [-1 * torch.pi / 12, 1 * torch.pi / 3]  # 俯仰角从-30度改为-15度,进一步提高最低高度
             y = [-1 * torch.pi / 4, 1 * torch.pi / 4]
             roll_ee = [-torch.pi * 0.45, torch.pi * 0.45]
             pitch_ee = [-angle60 , angle60]
@@ -374,13 +374,13 @@ class Cfg(PrefixProto, cli=False):
         disable_gravity = False
 
         # merge bodies connected by fixed joints. Specific fixed joints can be kept by adding " <... dont_collapse="true">
-        collapse_fixed_joints = True
+        collapse_fixed_joints = False
         fix_base_link = False  # fixe the base of the robot
         default_dof_drive_mode = 3  # see GymDofDriveModeFlags (0 is none, 1 is pos tgt, 2 is vel tgt, 3 effort)
         self_collisions = 0  # 1 to disable, 0 to enable...bitwise filter
         # replace collision cylinders with capsules, leads to faster/more stable simulation
         replace_cylinder_with_capsule = True
-        flip_visual_attachments = True  # Some .obj meshes must be flipped from y-up to z-up
+        flip_visual_attachments = False  # Some .obj meshes must be flipped from y-up to z-up
 
         density = 0.001
         angular_damping = 0.

@@ -50,7 +50,7 @@ pip install -e .
 ## Usage
 ### Train
 ```bash
-python scripts/auto_train.py --num_envs 4096 --run_name test_roboduet --sim_device cuda:0 --robot limx  # or --robot go2 
+python scripts/limx_auto_train.py --num_envs 4096 --run_name test_roboduet --sim_device cuda:0 --robot limx --no_wandb # or --robot go2 
 ```
 you can also use "--headless" to run the simulation without GUI
 ```bash

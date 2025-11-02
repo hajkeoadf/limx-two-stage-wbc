@@ -167,15 +167,15 @@ def train_go1(arg):
     
     args.log_dir = osp.join(f"{MINI_GYM_ROOT_DIR}/runs/{args.run_name}", wandb.run.name)
     args.log_dir += f'_seed{args.seed}'
-    
-    if not args.debug:
-        os.makedirs(osp.join(args.log_dir, "checkpoints_arm"), exist_ok=True)
-        os.makedirs(osp.join(args.log_dir, "checkpoints_dog"), exist_ok=True)
-        os.makedirs(osp.join(args.log_dir, "scripts"), exist_ok=True)
-        os.makedirs(osp.join(args.log_dir, "videos"), exist_ok=True)
-        os.makedirs(osp.join(args.log_dir, "deploy_model"), exist_ok=True)
-        os.makedirs(f"{MINI_GYM_ROOT_DIR}/tmp/deploy_model", exist_ok=True)
 
+    os.makedirs(osp.join(args.log_dir, "checkpoints_arm"), exist_ok=True)
+    os.makedirs(osp.join(args.log_dir, "checkpoints_dog"), exist_ok=True)
+    os.makedirs(osp.join(args.log_dir, "scripts"), exist_ok=True)
+    os.makedirs(osp.join(args.log_dir, "videos"), exist_ok=True)
+    os.makedirs(osp.join(args.log_dir, "deploy_model"), exist_ok=True)
+    os.makedirs(f"{MINI_GYM_ROOT_DIR}/tmp/deploy_model", exist_ok=True)
+
+    if not args.debug:
         # save code
         shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/scripts/limx_auto_train.py", f"{args.log_dir}/scripts/limx_auto_train.py")
         shutil.copyfile(f"{MINI_GYM_ROOT_DIR}/go1_gym/envs/automatic/limx_robot.py", f"{args.log_dir}/scripts/limx_robot.py")
@@ -207,6 +207,14 @@ def train_go1(arg):
             "Global_Switch/end": global_switch.pretrained_to_hybrid_end,
             }, step=0)
 
+    print(f"\n{'='*80}")
+    print(f"启动训练环境:")
+    print(f"  - Headless模式: {args.headless} (False=显示GUI, True=无GUI)")
+    print(f"  - 仿真设备: {args.sim_device}")
+    print(f"  - 环境数量: {Cfg.env.num_envs}")
+    print(f"  - 机器人类型: {args.robot}")
+    print(f"{'='*80}\n")
+    
     env = VelocityTrackingEasyEnv(sim_device=args.sim_device, headless=args.headless, cfg=Cfg)
     env = HistoryWrapper(env)
     gpu_id = args.sim_device.split(":")[-1]
