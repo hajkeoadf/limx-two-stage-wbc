@@ -399,7 +399,7 @@ class LeggedRobot(BaseTask):
                     (self.commands_dog * self.commands_scale_dog)[:, :6],
                     (self.obj_obs_pose_in_ee[:]) if global_switch.switch_open else torch.zeros_like(self.obj_obs_pose_in_ee[:]),
                     (self.obj_obs_abg_in_ee[:]) if global_switch.switch_open else torch.zeros_like(self.obj_obs_abg_in_ee[:]),
-                    roll.unsqueeze(1),
+                    # roll.unsqueeze(1),
                     pitch.unsqueeze(1),
                     base_height.unsqueeze(1),
                 ), dim=-1)
@@ -408,7 +408,7 @@ class LeggedRobot(BaseTask):
                 (obs_buf,
                     (self.commands_dog * self.commands_scale_dog)[:, :6],
                     (self.commands_arm_obs[:]) if global_switch.switch_open else torch.zeros_like(self.commands_arm_obs[:]),
-                    roll.unsqueeze(1),
+                    # roll.unsqueeze(1),
                     pitch.unsqueeze(1),
                     base_height.unsqueeze(1),
                 ), dim=-1)
@@ -921,7 +921,7 @@ class LeggedRobot(BaseTask):
         old_bins = self.env_command_bins[env_ids.cpu().numpy()]
         if len(success_thresholds) > 0:
             curriculum.update(old_bins, task_rewards, success_thresholds,
-                                local_range=np.array([0.55, 0.55, 0.55, 1.0, 1.0, 1.0]))
+                                local_range=np.array([0.55, 0.55, 0.55, 1.0, 1.0]))  # Fixed: removed body_roll, now 5 dims
 
         # sample from new category curricula
         new_commands, new_bin_inds = curriculum.sample(batch_size=len(env_ids))
@@ -971,8 +971,8 @@ class LeggedRobot(BaseTask):
                 
         if not global_switch.switch_open:
             self.commands_dog[env_ids, 3] = torch.Tensor(new_commands[:, 3]).to(self.device) # body pitch
-            self.commands_dog[env_ids, 4] = torch.Tensor(new_commands[:, 4]).to(self.device) # body roll
-            self.commands_dog[env_ids, 5] = torch.Tensor(new_commands[:, 5]).to(self.device) # base height
+            # self.commands_dog[env_ids, 4] = torch.Tensor(new_commands[:, 4]).to(self.device) # body roll
+            self.commands_dog[env_ids, 4] = torch.Tensor(new_commands[:, 4]).to(self.device) # base height
 
         # reset command sums
         for key in self.command_sums.keys():
@@ -1000,9 +1000,9 @@ class LeggedRobot(BaseTask):
                                                 body_pitch=(self.cfg.commands.limit_body_pitch[0],
                                                            self.cfg.commands.limit_body_pitch[1],
                                                            self.cfg.commands.num_bins_body_pitch),
-                                               body_roll=(self.cfg.commands.limit_body_roll[0],
-                                                          self.cfg.commands.limit_body_roll[1],
-                                                          self.cfg.commands.num_bins_body_roll),
+                                            #    body_roll=(self.cfg.commands.limit_body_roll[0],
+                                            #               self.cfg.commands.limit_body_roll[1],
+                                            #               self.cfg.commands.num_bins_body_roll),
                                                base_height=(self.cfg.commands.limit_base_height[0],
                                                           self.cfg.commands.limit_base_height[1],
                                                           self.cfg.commands.num_bins_base_height),
@@ -1017,11 +1017,13 @@ class LeggedRobot(BaseTask):
         low = np.array(
             [self.cfg.commands.lin_vel_x[0], self.cfg.commands.lin_vel_y[0],
              self.cfg.commands.ang_vel_yaw[0],self.cfg.commands.body_pitch_range[0],
-             self.cfg.commands.body_roll_range[0], self.cfg.commands.base_height_range[0]])
+            #  self.cfg.commands.body_roll_range[0], 
+             self.cfg.commands.base_height_range[0]])
         high = np.array(
             [self.cfg.commands.lin_vel_x[1], self.cfg.commands.lin_vel_y[1],
              self.cfg.commands.ang_vel_yaw[1], self.cfg.commands.body_pitch_range[1],
-             self.cfg.commands.body_roll_range[1], self.cfg.commands.base_height_range[1]])
+            #  self.cfg.commands.body_roll_range[1], 
+             self.cfg.commands.base_height_range[1]])
         for curriculum in self.curricula:
             curriculum.set_to(low=low, high=high)
 
@@ -1422,7 +1424,7 @@ class LeggedRobot(BaseTask):
 
         self.commands_dog = torch.zeros(self.num_envs, self.cfg.dog.dog_num_commands, dtype=torch.float,
                                           device=self.device, requires_grad=False)  # x vel, y vel, yaw vel, heading
-        self.commands_scale_dog = torch.tensor([self.obs_scales.lin_vel, self.obs_scales.lin_vel, self.obs_scales.ang_vel, self.obs_scales.body_pitch_cmd, self.obs_scales.body_roll_cmd, self.obs_scales.base_height], device=self.device, requires_grad=False, )[:self.cfg.dog.dog_num_commands]
+        self.commands_scale_dog = torch.tensor([self.obs_scales.lin_vel, self.obs_scales.lin_vel, self.obs_scales.ang_vel, self.obs_scales.body_pitch_cmd, self.obs_scales.base_height], device=self.device, requires_grad=False, )[:self.cfg.dog.dog_num_commands]
         self.rew_buf_dog = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.rew_buf_pos_dog = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.rew_buf_neg_dog = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
@@ -1827,7 +1829,7 @@ class LeggedRobot(BaseTask):
             pos = put_text_func(f'x_vel={self.commands_dog[0, 0]:.3f}', pos)
             pos = put_text_func(f'y_vel={self.commands_dog[0, 1]:.3f}', pos)
             pos = put_text_func(f'yaw_vel={self.commands_dog[0, 2]:.3f}', pos)
-            pos = put_text_func(f'[contrl] pitch={self.commands_dog[0, 3]:.3f}, roll={self.commands_dog[0, 4]:.3f}', pos)
+            pos = put_text_func(f'[contrl] pitch={self.commands_dog[0, 3]:.3f}, base_height={self.commands_dog[0, 4]:.3f}', pos)
             
             for i, command in enumerate(['l', 'p', 'y']):
                 pos = put_text_func(f'{command}={self.commands_arm[0, i]:.3f}', pos)
@@ -1836,9 +1838,9 @@ class LeggedRobot(BaseTask):
             #     kd={self.cfg.dog.control.damping_leg['joint']:.1f}", pos)
             # pos = put_text_func(f"arm kp={self.cfg.arm.control.stiffness_arm['zarx']:.1f}\
             #     kd={self.cfg.arm.control.damping_arm['zarx']:.1f}", pos)
-            pos = put_text_func(f"base height={self.root_states[0, 2]:.3f}", pos)
+            # pos = put_text_func(f"base height={self.root_states[0, 2]:.3f}", pos)
             pos = put_text_func(f"delta z={self.delta_z[0]:.3f}", pos)
-            pos = put_text_func(f"'[body] pitch={self.pitch[0]:.3f}, roll={self.roll[0]:.3f}", pos)
+            pos = put_text_func(f"'[body] pitch={self.pitch[0]:.3f}, base_height={self.root_states[0, 2]:.3f}", pos)
             
             self.video_frames.append(self.video_frame)
 
@@ -2150,6 +2152,9 @@ class LeggedRobot(BaseTask):
                 self.foot_positions[:, :, 2]
                 - self.cfg.asset.foot_radius
                 - self._get_foot_heights()), 0, 1)
+        contact = torch.norm(self.contact_forces[:, self.feet_indices], dim=-1) > 2.
+        self.contact_filt = torch.logical_or(contact, self.last_contacts)
+        self.last_contacts = contact
 
     def _resample_gaits(self, env_ids):
         if len(env_ids) == 0:

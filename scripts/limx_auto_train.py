@@ -57,10 +57,10 @@ def train_go1(arg):
     Cfg.control.control_type = "M"
  
     Cfg.env.observe_two_prev_actions = False
-    Cfg.commands.body_roll_range = [-0.4, 0.4]
-    Cfg.commands.limit_body_roll = [-0.4, 0.4]
-    Cfg.commands.body_pitch_range = [-0.4, 0.4]
-    Cfg.commands.limit_body_pitch = [-0.4, 0.4]
+    Cfg.commands.body_roll_range = [0, 0]
+    Cfg.commands.limit_body_roll = [0, 0]
+    Cfg.commands.body_pitch_range = [-0.1, 0.3]
+    Cfg.commands.limit_body_pitch = [-0.1, 0.3]
 
     Cfg.env.num_envs = args.num_envs
 
@@ -72,12 +72,11 @@ def train_go1(arg):
         
     Cfg.control.update_obs_freq = 20  # Hz
     Cfg.env.num_actions = 14
-    Cfg.env.num_observations = 63
+    Cfg.env.num_observations = 61
 
     
-    Cfg.hybrid.reward_scales.tracking_lin_vel = 0.7 * Cfg.reward_scales.tracking_lin_vel
+    Cfg.hybrid.reward_scales.tracking_lin_vel = 1.5 * Cfg.reward_scales.tracking_lin_vel
     Cfg.hybrid.reward_scales.tracking_ang_vel = 0.5 * Cfg.reward_scales.tracking_ang_vel
-    Cfg.hybrid.reward_scales.orientation = 0.0 * Cfg.reward_scales.orientation
     
     Cfg.hybrid.reward_scales.arm_energy = -0.00004
     Cfg.reward_scales.loco_energy = -0.00004
@@ -86,11 +85,11 @@ def train_go1(arg):
     Cfg.rewards.use_terminal_body_height = True
     
     DogRunnerArgs.resume = args.resume
-    DogRunnerArgs.resume_path = 'your_dog_ckpt_path'
-    ArmRunnerArgs.resume = args.resume
-    ArmRunnerArgs.resume_path = 'your_arm_ckpt_path'
+    DogRunnerArgs.resume_path = '/home2/HYX/limx-two-stage-wbc/runs/test_roboduet/2025-11-03/limx_auto_train/110510.923515_seed6188/checkpoints_dog/ac_weights_002800.pt'
+    # ArmRunnerArgs.resume = args.resume
+    # ArmRunnerArgs.resume_path = 'your_arm_ckpt_path'
     
-    global_switch.pretrained_to_hybrid_start = 2000 if args.resume else 10000 # 2000 with pretrained, 10000 from scratch
+    global_switch.pretrained_to_hybrid_start = 1000 if args.resume else 10000 # 2000 with pretrained, 10000 from scratch
     
     if args.wo_two_stage:
         global_switch.pretrained_to_hybrid_start = 0

@@ -64,8 +64,8 @@ class ArmRunnerArgs(PrefixProto, cli=False):
     resume = False
     
 class DogRunnerArgs(PrefixProto, cli=False):
-    resume_path = 'your_dog_ckpt_path'
-    resume = False
+    resume_path = '/home2/HYX/limx-two-stage-wbc/runs/test_roboduet/2025-11-03/limx_auto_train/110510.923515_seed6188/checkpoints_dog/ac_weights_002800.pt'
+    resume = True
 
 def custom_decay_reward_scale(iteration, initial_scale=1.5, final_scale=0.8, max_iterations=8000):
     if iteration >= max_iterations:

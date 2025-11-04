@@ -153,7 +153,7 @@ def config_wtw(Cnfg: Union[Cfg, Meta]):
     Cnfg.commands.gait_bound_cmd_range = [0.0, 1.0]
     Cnfg.commands.gait_duration_cmd_range = [0.5, 0.5]
     Cnfg.commands.footswing_height_range = [0.10, 0.20]  # Updated to match solefoot_flat
-    Cnfg.commands.body_pitch_range = [-0.4, 0.4]
+    Cnfg.commands.body_pitch_range = [-0.1, 0.3]
     Cnfg.commands.body_roll_range = [-0.0, 0.0]
     Cnfg.commands.stance_width_range = [0.10, 0.45]
     Cnfg.commands.stance_length_range = [0.35, 0.45]
@@ -168,8 +168,8 @@ def config_wtw(Cnfg: Union[Cfg, Meta]):
     Cnfg.commands.limit_gait_bound = [0.0, 1.0]
     Cnfg.commands.limit_gait_duration = [0.5, 0.5]
     Cnfg.commands.limit_footswing_height = [0.10, 0.20]  # Updated to match solefoot_flat
-    Cnfg.commands.limit_body_pitch = [-0.4, 0.4]
-    Cnfg.commands.limit_body_roll = [-0.4, 0.4]
+    Cnfg.commands.limit_body_pitch = [-0.1, 0.3]
+    Cnfg.commands.limit_body_roll = [-0.0, 0.0]  # Fixed: dog roll should be 0
     Cnfg.commands.limit_stance_width = [0.10, 0.45]
     Cnfg.commands.limit_stance_length = [0.35, 0.45]
 

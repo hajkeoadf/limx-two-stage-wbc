@@ -21,15 +21,15 @@ class Rewards:
     
     def _reward_arm_orientation_control(self):
         pitch_error = torch.abs(self.env.plan_actions[:, 0] + self.env.pitch)
-        roll_error = torch.abs(self.env.plan_actions[:, 1] + self.env.roll)
+        base_height_error = torch.abs(self.env.plan_actions[:, 1] + self.env.base_pos[:, 2])
     
-        return pitch_error + roll_error
+        return pitch_error + base_height_error
 
     def _reward_arm_control_limits(self):
         out_of_limits = -(self.env.plan_actions[:, 0] - self.env.cfg.commands.limit_body_pitch[0]).clip(max=0.)  # lower limit
         out_of_limits += (self.env.plan_actions[:, 0] - self.env.cfg.commands.limit_body_pitch[1]).clip(min=0.)
-        out_of_limits += -(self.env.plan_actions[:, 1] - self.env.cfg.commands.limit_body_roll[0]).clip(max=0.)  # lower limit
-        out_of_limits += (self.env.plan_actions[:, 1] - self.env.cfg.commands.limit_body_roll[1]).clip(min=0.)
+        out_of_limits += -(self.env.plan_actions[:, 1] - self.env.cfg.commands.limit_base_height[0]).clip(max=0.)  # lower limit
+        out_of_limits += (self.env.plan_actions[:, 1] - self.env.cfg.commands.limit_base_height[1]).clip(min=0.)
         return out_of_limits
         
     def _reward_arm_control_smoothness_1(self):
@@ -130,6 +130,11 @@ class Rewards:
         # Penalize dof accelerations
         return torch.sum(torch.square((self.env.last_dof_vel - self.env.dof_vel)[..., :self.env.num_actions_loco] / self.env.dt), dim=1)
 
+    def _reward_keep_ankle_pitch_zero_in_air(self):
+        ankle_pitch = torch.abs(self.env.dof_pos[:, 3]) * ~self.env.contact_filt[:, 0] + torch.abs(
+            self.env.dof_pos[:, 7]) * ~self.env.contact_filt[:, 1]
+        return torch.exp(-torch.abs(ankle_pitch) / 0.2)
+
     def _reward_action_rate(self):
         # Penalize changes in actions
         return torch.sum(torch.square(self.env.last_actions - self.env.actions)[..., :self.env.num_actions_loco], dim=1)
@@ -150,19 +155,32 @@ class Rewards:
         desired_contact = self.env.desired_contact_states
         reward = 0
         if self.env.cfg.reward_scales.tracking_contacts_shaped_force > 0:
+            # 奖励模式：返回值越大越好
             for i in range(len(self.env.feet_indices)):
                 swing_phase = 1 - desired_contact[:, i]
+                stand_phase = desired_contact[:, i]
+                # swing_phase: 希望 foot_forces 小（不接触）→ exp 接近 1 → 奖励大
                 reward += swing_phase * torch.exp(
                     -foot_forces[:, i] ** 2 / self.env.cfg.rewards.gait_force_sigma
                 )
+                # stand_phase: 希望 foot_forces 大（接触）→ exp(-大数) 接近 0，所以用 1 - exp 让大值得到高奖励
+                reward += stand_phase * (1 - torch.exp(
+                    -foot_forces[:, i] ** 2 / self.env.cfg.rewards.gait_force_sigma
+                ))
         else:
+            # 惩罚模式：返回值越小越好（因为会被乘以负数，所以返回值越小惩罚越小）
             for i in range(len(self.env.feet_indices)):
                 swing_phase = 1 - desired_contact[:, i]
+                stand_phase = desired_contact[:, i]
+                # swing_phase: 希望 foot_forces 小 → 当 foot_forces 小时，(1-exp) 接近 0 → 惩罚小（奖励大）
                 reward += swing_phase * (
-                    1
-                    - torch.exp(
+                    1 - torch.exp(
                         -foot_forces[:, i] ** 2 / self.env.cfg.rewards.gait_force_sigma
                     )
+                )
+                # stand_phase: 希望 foot_forces 大 → 当 foot_forces 大时，exp(-大数) 接近 0 → 惩罚小（奖励大）
+                reward += stand_phase * torch.exp(
+                    -foot_forces[:, i] ** 2 / self.env.cfg.rewards.gait_force_sigma
                 )
         return reward / len(self.env.feet_indices)
 
@@ -171,28 +189,31 @@ class Rewards:
         desired_contact = self.env.desired_contact_states
         reward = 0
         if self.env.cfg.reward_scales.tracking_contacts_shaped_vel > 0:
+            # 奖励模式：返回值越大越好
             for i in range(len(self.env.feet_indices)):
                 stand_phase = desired_contact[:, i]
+                swing_phase = 1 - desired_contact[:, i]
+                # stand_phase: 希望 foot_velocities 小（脚不动）→ exp 接近 1 → 奖励大
                 reward += stand_phase * torch.exp(
                     -foot_velocities[:, i] ** 2 / self.env.cfg.rewards.gait_vel_sigma
                 )
-                # if self.cfg.terrain.mesh_type == "plane":
-                swing_phase = 1 - desired_contact[:, i]
+                # swing_phase: 希望跟踪期望的垂直速度 → exp 接近 1 → 奖励大
                 reward += swing_phase * torch.exp(
                     -((self.env.foot_velocities[:, i, 2] - self.env.des_foot_velocity_z) ** 2)
                     / self.env.cfg.rewards.gait_vel_sigma
                 )
         else:
+            # 惩罚模式：返回值越小越好（因为会被乘以负数）
             for i in range(len(self.env.feet_indices)):
                 stand_phase = desired_contact[:, i]
+                swing_phase = 1 - desired_contact[:, i]
+                # stand_phase: 希望 foot_velocities 小 → 当速度小时，(1-exp) 接近 0 → 惩罚小（奖励大）
                 reward += stand_phase * (
-                    1
-                    - torch.exp(
+                    1 - torch.exp(
                         -foot_velocities[:, i] ** 2 / self.env.cfg.rewards.gait_vel_sigma
                     )
                 )
-                # if self.cfg.terrain.mesh_type == "plane":
-                swing_phase = 1 - desired_contact[:, i]
+                # swing_phase: 希望跟踪期望的垂直速度 → 当跟踪好时，(1-exp) 接近 0 → 惩罚小（奖励大）
                 reward += swing_phase * (1 - torch.exp(
                     -((self.env.foot_velocities[:, i, 2] - self.env.des_foot_velocity_z) ** 2)
                     / self.env.cfg.rewards.gait_vel_sigma)
@@ -204,22 +225,26 @@ class Rewards:
         desired_contact = self.env.desired_contact_states
         reward = 0
         if self.env.cfg.reward_scales.tracking_contacts_shaped_height > 0:
+            # 奖励模式：返回值越大越好
             for i in range(len(self.env.feet_indices)):
                 swing_phase = 1 - desired_contact[:, i]
-                # if self.cfg.terrain.mesh_type == "plane":
+                stand_phase = desired_contact[:, i]
+                # swing_phase: 希望跟踪期望高度 → exp 接近 1 → 奖励大
                 reward += swing_phase * torch.exp(
                     -(foot_heights[:, i] - self.env.des_foot_height) ** 2 / self.env.cfg.rewards.gait_height_sigma
                 )
-                stand_phase = desired_contact[:, i]
+                # stand_phase: 希望 foot_heights 接近 0（脚贴地）→ exp 接近 1 → 奖励大
                 reward += stand_phase * torch.exp(-(foot_heights[:, i]) ** 2 / self.env.cfg.rewards.gait_height_sigma)
         else:
+            # 惩罚模式：返回值越小越好（因为会被乘以负数）
             for i in range(len(self.env.feet_indices)):
                 swing_phase = 1 - desired_contact[:, i]
-                # if self.cfg.terrain.mesh_type == "plane":
-                reward += swing_phase * (
-                        1 - torch.exp(-(foot_heights[:, i] - self.env.des_foot_height) ** 2 / self.env.cfg.rewards.gait_height_sigma)
-                )
                 stand_phase = desired_contact[:, i]
+                # swing_phase: 希望跟踪期望高度 → 当跟踪好时，(1-exp) 接近 0 → 惩罚小（奖励大）
+                reward += swing_phase * (
+                    1 - torch.exp(-(foot_heights[:, i] - self.env.des_foot_height) ** 2 / self.env.cfg.rewards.gait_height_sigma)
+                )
+                # stand_phase: 希望 foot_heights 接近 0 → 当接近 0 时，(1-exp) 接近 0 → 惩罚小（奖励大）
                 reward += stand_phase * (1 - torch.exp(-(foot_heights[:, i]) ** 2 / self.env.cfg.rewards.gait_height_sigma))
         return reward / len(self.env.feet_indices)
 
@@ -270,23 +295,23 @@ class Rewards:
         # Adjusted thresholds for base height 0.8m (was 0.38m)
         # Base height increased ~2.1x, so thresholds are scaled accordingly
         down_flag = self.env.delta_z < -self.env.cfg.hybrid.rewards.headupdown_thres
-        up_flag = self.env.delta_z > self.env.cfg.hybrid.rewards.headupdown_thres+0.5
+        up_flag = self.env.delta_z > self.env.cfg.hybrid.rewards.headupdown_thres+0.1
         # Adjusted pitch targets: for taller base, may need larger pitch angles
         # Original: pitch_down=0.4, pitch_up=-0.3
         # For 0.8m base: keeping same angles or can adjust based on task requirements
-        guide[down_flag] = torch.square(self.env.pitch - 0.4)[down_flag]  # pitch down to 0.4 rad (~23°)
-        guide[up_flag] = torch.square(self.env.pitch + 0.3)[up_flag]  # pitch up to -0.3 rad (~17°)
+        guide[down_flag] = torch.square(self.env.pitch - 0.3)[down_flag]  # pitch down to 0.3 rad (~23°)
+        guide[up_flag] = torch.square(self.env.pitch + 0.1)[up_flag]  # pitch up to -0.1 rad (~17°)
         
         return guide
 
     def _reward_orientation_control(self):
         # Penalize non flat base orientation
-        # import ipdb; ipdb.set_trace()
-        roll_pitch_commands = self.env.commands_dog[:, 3:5]
+        # roll command is 0, only pitch command exists
+        pitch_command = self.env.commands_dog[:, 3]  # body pitch command
         # print(roll_pitch_commands)
-        quat_roll = quat_from_angle_axis(-roll_pitch_commands[:, 1],
+        quat_roll = quat_from_angle_axis(torch.zeros_like(pitch_command),  # roll is always 0
                                          torch.tensor([1, 0, 0], device=self.env.device, dtype=torch.float))
-        quat_pitch = quat_from_angle_axis(-roll_pitch_commands[:, 0],
+        quat_pitch = quat_from_angle_axis(-pitch_command,
                                           torch.tensor([0, 1, 0], device=self.env.device, dtype=torch.float))
 
         desired_base_quat = quat_mul(quat_roll, quat_pitch)
@@ -295,7 +320,7 @@ class Rewards:
         return torch.sum(torch.square(self.env.projected_gravity[:, :2] - desired_projected_gravity[:, :2]), dim=1)
 
     def _reward_base_height_control(self):
-        base_height_command = self.env.commands_dog[:, 5]
+        base_height_command = self.env.commands_dog[:, 4]
         return torch.square(self.env.base_pos[:, 2] - base_height_command)
     
     # vis

@@ -30,21 +30,35 @@ class VelocityTrackingEasyEnv(LeggedRobot):
 
     def plan(self, obs):
         rescaled_obs = obs * 0.4
-        # Plan actions: [pitch, roll, base_height] or [pitch, roll, base_height, lin_vel, ang_vel] if plan_vel=True
+        # Plan actions: [pitch, base_height] or [pitch, base_height, lin_vel, ang_vel] if plan_vel=True
         self.commands_dog[:, 3] = torch.clip(rescaled_obs[..., 0],
                                              self.cfg.commands.limit_body_pitch[0],
                                              self.cfg.commands.limit_body_pitch[1] / 4 * 3.)  # pitch
-        self.commands_dog[:, 4] = torch.clip(rescaled_obs[..., 1],
-                                             self.cfg.commands.limit_body_roll[0],
-                                             self.cfg.commands.limit_body_roll[1])  # roll
-        self.commands_dog[:, 5] = torch.clip(rescaled_obs[..., 2],
-                                             self.cfg.commands.limit_base_height[0],
-                                             self.cfg.commands.limit_base_height[1])  # base_height
+        # self.commands_dog[:, 4] = torch.clip(rescaled_obs[..., 1],
+        #                                      self.cfg.commands.limit_body_roll[0],
+        #                                      self.cfg.commands.limit_body_roll[1])  # roll
+        # self.commands_dog[:, 4] = torch.clip(rescaled_obs[..., 1],
+        #                                      self.cfg.commands.limit_base_height[0],
+        #                                      self.cfg.commands.limit_base_height[1])  # base_height
+
+        # 根据arm目标点高度规则设置base_height_command
+        # 目标点高度 = l * sin(p) + 0.8 (相对于地面的高度，0.8是基座高度补偿)
+        l_align = self.commands_arm[:, 0]
+        p_align = self.commands_arm[:, 1]
+        target_height = l_align * torch.sin(p_align) + 0.8  # 目标点相对于地面的高度
+        
+        # 根据目标高度规则设置base_height_command
+        height_min = self.cfg.commands.limit_base_height[0]
+        height_max = self.cfg.commands.limit_base_height[1]
+        
+        # 如果目标点在range内，base_height_command = 目标点高度
+        # 如果低于最小值，设为最小值；如果高于最大值，设为最大值
+        self.commands_dog[:, 4] = torch.clamp(target_height, height_min, height_max)
         
         if self.cfg.hybrid.plan_vel:
-            # If plan_vel is True, obs should have 5 dimensions: [pitch, roll, base_height, lin_vel, ang_vel]
-            self.commands_dog[:, 0] = torch.clip(rescaled_obs[..., 3], -2, 2)  # lin_vel
-            self.commands_dog[:, 2] = torch.clip(rescaled_obs[..., 4], -2, 2)  # ang_vel
+            # If plan_vel is True, obs should have 5 dimensions: [pitch, base_height, lin_vel, ang_vel]
+            self.commands_dog[:, 0] = torch.clip(rescaled_obs[..., 2], -2, 2)  # lin_vel
+            self.commands_dog[:, 2] = torch.clip(rescaled_obs[..., 3], -2, 2)  # ang_vel
         self.plan_actions[:] = rescaled_obs
 
     def reset(self):
@@ -74,7 +88,7 @@ class VelocityTrackingEasyEnv(LeggedRobot):
                     obs_buf,
                     (self.obj_obs_pose_in_ee[:]),
                     (self.obj_obs_abg_in_ee[:]),
-                    roll.unsqueeze(1),
+                    # roll.unsqueeze(1),
                     pitch.unsqueeze(1),
                     base_height.unsqueeze(1),
                 ), dim=-1)
@@ -84,7 +98,7 @@ class VelocityTrackingEasyEnv(LeggedRobot):
                 (
                     obs_buf,
                     self.commands_arm_obs[:, :idx],
-                    roll.unsqueeze(1),
+                    # roll.unsqueeze(1),
                     pitch.unsqueeze(1),
                     base_height.unsqueeze(1),
                 ), dim=-1)
@@ -188,7 +202,7 @@ class VelocityTrackingEasyEnv(LeggedRobot):
                     (self.commands_dog * self.commands_scale_dog)[:, :6],
                     (self.obj_obs_pose_in_ee[:]) if global_switch.switch_open else torch.zeros_like(self.obj_obs_pose_in_ee[:]),
                     (self.obj_obs_abg_in_ee[:]) if global_switch.switch_open else torch.zeros_like(self.obj_obs_abg_in_ee[:]),
-                    roll.unsqueeze(1),
+                    # roll.unsqueeze(1),
                     pitch.unsqueeze(1),
                     base_height.unsqueeze(1),
                 ), dim=-1)
@@ -198,7 +212,7 @@ class VelocityTrackingEasyEnv(LeggedRobot):
                 (obs_buf,
                     (self.commands_dog * self.commands_scale_dog)[:, :6],
                     (self.commands_arm_obs[:, :6]) if global_switch.switch_open else torch.zeros_like(self.commands_arm_obs[:, :idx]),
-                    roll.unsqueeze(1),
+                    # roll.unsqueeze(1),
                     pitch.unsqueeze(1),
                     base_height.unsqueeze(1),
                 ), dim=-1)

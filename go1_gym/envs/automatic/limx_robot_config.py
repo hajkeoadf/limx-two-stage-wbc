@@ -17,9 +17,9 @@ class Cfg(PrefixProto, cli=False):
             use_terminal_pitch = True
             use_terminal_roll_pitch = False # TODO
             terminal_body_roll = 0.10
-            terminal_body_pitch = 0.2
+            terminal_body_pitch = 0.3
             terminal_body_pitch_roll = 80./180.*torch.pi
-            headupdown_thres = 0.5
+            headupdown_thres = 0.7
             
         class reward_scales(PrefixProto, cli=False):
             # hip_joint_penality = -0.
@@ -27,7 +27,6 @@ class Cfg(PrefixProto, cli=False):
             vis_manip_commands_tracking_lpy = 1.
             vis_manip_commands_tracking_rpy = 1.
             orientation_heuristic = -2.0
-            orientation_control = -10.
             # penalize_yaw = -0.5
             # penalize_pitch = -0.5
             # action_smoothness_1 = -0.
@@ -40,16 +39,16 @@ class Cfg(PrefixProto, cli=False):
         num_actions_arm = 6
         arm_num_privileged_obs = 9
         arm_num_observation_history = 30
-        arm_num_observations = 21
+        arm_num_observations = 20
         arm_num_obs_history = arm_num_observations * arm_num_observation_history
         arm_num_commands = 6
-        num_actions_arm_cd = 9  # 6 arm actions + 3 plan actions (pitch, roll, base_height)
+        num_actions_arm_cd = 8  # 6 arm actions + 2 plan actions (pitch, base_height)
         
         class commands(PrefixProto, cli=False):
             angle75 = torch.deg2rad(torch.tensor(75))
             angle60 = torch.deg2rad(torch.tensor(60))
-            l = [0.4, 0.6]  # 增加最小距离从0.3到0.4,提高末端最低高度
-            p = [-1 * torch.pi / 12, 1 * torch.pi / 3]  # 俯仰角从-30度改为-15度,进一步提高最低高度
+            l = [0.4, 0.5]  # 减小最大距离从0.6到0.5,降低末端最高高度
+            p = [-1 * torch.pi / 12, torch.deg2rad(torch.tensor(40))]  # 俯仰角从60度改为50度,进一步降低最高高度
             y = [-1 * torch.pi / 4, 1 * torch.pi / 4]
             roll_ee = [-torch.pi * 0.45, torch.pi * 0.45]
             pitch_ee = [-angle60 , angle60]
@@ -84,17 +83,17 @@ class Cfg(PrefixProto, cli=False):
         num_actions_loco = 8
         dog_num_privileged_obs = 2
         dog_num_observation_history = 30
-        dog_num_observations = 54
+        dog_num_observations = 52
         dog_num_obs_history = dog_num_observations * dog_num_observation_history
-        dog_num_commands = 6
+        dog_num_commands = 5
         dog_actions = 8
 
         class control(PrefixProto, cli=False):
             stiffness_leg = {
-                "ankle": 45,
-                "hip": 45,
-                "knee": 45,
-                "abad": 45,
+                "ankle": 50,
+                "hip": 50,
+                "knee": 50,
+                "abad": 50,
             }
             damping_leg = {
                 "ankle": 0.8,
@@ -243,21 +242,21 @@ class Cfg(PrefixProto, cli=False):
         lin_vel_x = [-1.0, 1.0]  # min max [m/s]
         lin_vel_y = [-1.0, 1.0]  # min max [m/s]
         ang_vel_yaw = [-1, 1]  # min max [rad/s]
-        base_height_range = [0.56, 0.78]
+        base_height_range = [0.70, 0.78]
         impulse_height_commands = False
 
         limit_vel_x = [-10.0, 10.0]
         limit_vel_y = [-0.6, 0.6]
         limit_vel_yaw = [-10.0, 10.0]
-        limit_base_height = [0.56, 0.78]
+        limit_base_height = [0.70, 0.78]
         limit_gait_phase = [0, 0.01]
         limit_gait_offset = [0, 0.01]
         limit_gait_bound = [0, 0.01]
         limit_gait_frequency = [2.0, 2.01]
         limit_gait_duration = [0.49, 0.5]
         limit_footswing_height = [0.06, 0.061]
-        limit_body_pitch = [-0.4, 0.4]
-        limit_body_roll = [-0.4, 0.4]
+        limit_body_pitch = [-0.1, 0.3]
+        limit_body_roll = [-0.0, 0.0]  # Fixed: dog roll should be 0
         limit_aux_reward_coef = [0.0, 0.01]
         limit_compliance = [0.0, 0.01]
         limit_stance_width = [0.0, 0.01]
@@ -289,8 +288,8 @@ class Cfg(PrefixProto, cli=False):
         gait_frequency_cmd_range = [2.0, 2.01]
         gait_duration_cmd_range = [0.49, 0.5]
         footswing_height_range = [0.06, 0.061]
-        body_pitch_range = [0.0, 0.01]
-        body_roll_range = [0.0, 0.01]
+        body_pitch_range = [-0.1, 0.3]
+        body_roll_range = [0.0, 0.0]  # Fixed: dog roll should be 0
         aux_reward_coef_range = [0.0, 0.01]
         compliance_range = [0.0, 0.01]
         stance_width_range = [0.0, 0.01]
@@ -453,7 +452,7 @@ class Cfg(PrefixProto, cli=False):
         lin_vel_z = -0.5
         ang_vel_xy = -0.05
         base_height_control = -10.0
-        orientation = -5.0
+        orientation_control = -5.0
         torques = -0.00008
         dof_vel = -0.
         dof_acc = -2.5e-7
@@ -464,6 +463,7 @@ class Cfg(PrefixProto, cli=False):
         tracking_contacts_shaped_force = -2.0
         tracking_contacts_shaped_vel = -2.0
         tracking_contacts_shaped_height = -2.0  # Added: from limx_rewards.py
+        keep_ankle_pitch_zero_in_air = 1.0
         loco_energy = -2e-4  # Added: from limx_rewards.py (_reward_loco_energy)
         dof_pos_limits = -2.0
         feet_contact_forces = -0.002
